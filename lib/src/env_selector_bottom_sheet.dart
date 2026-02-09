@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:env_switcher/src/env_config.dart';
 import 'package:env_switcher/src/env_manager.dart';
+import 'package:env_switcher/src/credentials_input_dialog.dart';
 
 /// Bottom sheet widget for selecting environment
 class EnvSelectorBottomSheet extends StatefulWidget {
@@ -166,6 +167,7 @@ class _EnvSelectorBottomSheetState extends State<EnvSelectorBottomSheet> {
   Widget _buildEnvironmentTile(EnvConfig env) {
     final isSelected = _selectedEnv == env;
     final isCurrent = _envManager.currentEnvironment == env;
+    final hasCredentials = _envManager.hasCredentials(env.name);
     final theme = Theme.of(context);
 
     return Card(
@@ -226,6 +228,14 @@ class _EnvSelectorBottomSheetState extends State<EnvSelectorBottomSheet> {
                             ),
                           ),
                         ],
+                        if (env.requiresCredentials) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                            hasCredentials ? Icons.key : Icons.key_off,
+                            size: 16,
+                            color: hasCredentials ? Colors.green : Colors.orange,
+                          ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -235,6 +245,16 @@ class _EnvSelectorBottomSheetState extends State<EnvSelectorBottomSheet> {
                         color: Colors.grey[600],
                       ),
                     ),
+                    if (env.requiresCredentials && !hasCredentials) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Requires credentials',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.orange[700],
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -246,12 +266,42 @@ class _EnvSelectorBottomSheetState extends State<EnvSelectorBottomSheet> {
   }
 
   Future<void> _applyEnvironment() async {
-    if (_selectedEnv == null) {
-      return;
-    }
+    if (_selectedEnv == null) return;
 
     try {
-      await _envManager.switchEnvironment(_selectedEnv!);
+      // Check if credentials are required
+      if (_selectedEnv!.requiresCredentials) {
+        final savedCredentials = _envManager.getCredentials(_selectedEnv!.name);
+        
+        // Show credentials dialog if not saved or if switching to new env
+        if (savedCredentials == null || savedCredentials.isEmpty) {
+          final credentials = await CredentialsInputDialog.show(
+            context,
+            environment: _selectedEnv!,
+            savedCredentials: savedCredentials,
+          );
+          
+          // User cancelled
+          if (credentials == null) {
+            return;
+          }
+          
+          // Switch with credentials
+          await _envManager.switchEnvironment(
+            _selectedEnv!,
+            credentials: credentials,
+          );
+        } else {
+          // Use saved credentials
+          await _envManager.switchEnvironment(
+            _selectedEnv!,
+            credentials: savedCredentials,
+          );
+        }
+      } else {
+        // No credentials required, switch directly
+        await _envManager.switchEnvironment(_selectedEnv!);
+      }
       
       if (mounted) {
         Navigator.of(context).pop();

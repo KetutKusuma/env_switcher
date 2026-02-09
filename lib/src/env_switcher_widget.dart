@@ -73,9 +73,7 @@ class _EnvSwitcherWidgetState extends State<EnvSwitcherWidget>
   }
 
   void _handleTap() {
-    if (!widget.enabled) {
-      return;
-    }
+    if (!widget.enabled) return;
 
     final now = DateTime.now();
 
