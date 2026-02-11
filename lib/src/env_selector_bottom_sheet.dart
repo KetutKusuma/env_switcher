@@ -201,7 +201,7 @@ class _EnvSelectorBottomSheetState extends State<EnvSelectorBottomSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                    Wrap(
                       children: [
                         Text(
                           env.displayName,
