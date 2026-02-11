@@ -9,6 +9,7 @@ void main() {
     late List<EnvConfig> testEnvironments;
 
     setUp(() {
+      EnvManager().resetForTesting();
       SharedPreferences.setMockInitialValues({});
 
       testEnvironments = [
@@ -144,6 +145,56 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       final savedEnv = prefs.getString('env_switcher_selected_env');
       expect(savedEnv, null);
+    });
+
+    test('Non-persistent storage', () async {
+      final envManager = EnvManager();
+
+      await envManager.initialize(
+        environments: testEnvironments,
+        defaultEnvironment: testEnvironments[0],
+        usePersistentStorage: false,
+      );
+
+      // Switch to staging
+      await envManager.switchEnvironment(testEnvironments[1]);
+
+      // Verify that it is NOT saved in SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final savedEnv = prefs.getString('env_switcher_selected_env');
+      expect(savedEnv, null);
+    });
+
+    test('Non-persistent credentials', () async {
+      final envManager = EnvManager();
+
+      final environmentsWithCreds = [
+        const EnvConfig(
+          name: 'dev',
+          displayName: 'Development',
+          baseUrl: 'https://dev.example.com',
+          requiresCredentials: true,
+        ),
+      ];
+
+      await envManager.initialize(
+        environments: environmentsWithCreds,
+        usePersistentStorage: false,
+      );
+
+      // Save credentials
+      await envManager.switchEnvironment(
+        environmentsWithCreds[0],
+        credentials: {'password': 'secret'},
+      );
+
+      // Verify they are in memory
+      expect(envManager.getCredential('password'), 'secret');
+
+      // Verify they are NOT in SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final savedCreds = prefs.getString('env_switcher_credentials_dev');
+      expect(savedCreds, null);
     });
   });
 

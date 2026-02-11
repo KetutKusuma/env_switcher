@@ -15,6 +15,7 @@ class EnvManager extends ChangeNotifier {
   List<EnvConfig> _availableEnvironments = [];
   EnvConfig? _currentEnvironment;
   bool _isInitialized = false;
+  bool _usePersistentStorage = true;
   final Map<String, Map<String, String>> _credentials = {};
 
   /// Get the current selected environment
@@ -30,6 +31,7 @@ class EnvManager extends ChangeNotifier {
   Future<void> initialize({
     required List<EnvConfig> environments,
     EnvConfig? defaultEnvironment,
+    bool usePersistentStorage = true,
   }) async {
     if (_isInitialized) {
       debugPrint('EnvManager: Already initialized');
@@ -41,22 +43,27 @@ class EnvManager extends ChangeNotifier {
     }
 
     _availableEnvironments = environments;
+    _usePersistentStorage = usePersistentStorage;
 
-    // Try to load saved environment
-    final prefs = await SharedPreferences.getInstance();
-    final savedEnvName = prefs.getString(_storageKey);
+    if (_usePersistentStorage) {
+      // Try to load saved environment
+      final prefs = await SharedPreferences.getInstance();
+      final savedEnvName = prefs.getString(_storageKey);
 
-    if (savedEnvName != null) {
-      _currentEnvironment = _availableEnvironments.firstWhere(
-        (env) => env.name == savedEnvName,
-        orElse: () => defaultEnvironment ?? _availableEnvironments.first,
-      );
+      if (savedEnvName != null) {
+        _currentEnvironment = _availableEnvironments.firstWhere(
+          (env) => env.name == savedEnvName,
+          orElse: () => defaultEnvironment ?? _availableEnvironments.first,
+        );
+      } else {
+        _currentEnvironment = defaultEnvironment ?? _availableEnvironments.first;
+      }
+
+      // Load saved credentials for all environments
+      await _loadAllCredentials();
     } else {
       _currentEnvironment = defaultEnvironment ?? _availableEnvironments.first;
     }
-
-    // Load saved credentials for all environments
-    await _loadAllCredentials();
 
     _isInitialized = true;
     notifyListeners();
@@ -81,8 +88,10 @@ class EnvManager extends ChangeNotifier {
     _currentEnvironment = newEnvironment;
 
     // Save to shared preferences
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_storageKey, newEnvironment.name);
+    if (_usePersistentStorage) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_storageKey, newEnvironment.name);
+    }
 
     notifyListeners();
     debugPrint('EnvManager: Switched to ${newEnvironment.name}');
@@ -117,9 +126,11 @@ class EnvManager extends ChangeNotifier {
     String envName,
     Map<String, String> credentials,
   ) async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = '$_credentialsKeyPrefix$envName';
-    await prefs.setString(key, jsonEncode(credentials));
+    if (_usePersistentStorage) {
+      final prefs = await SharedPreferences.getInstance();
+      final key = '$_credentialsKeyPrefix$envName';
+      await prefs.setString(key, jsonEncode(credentials));
+    }
     debugPrint('EnvManager: Saved credentials for $envName');
   }
 
@@ -183,5 +194,15 @@ class EnvManager extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_storageKey);
     debugPrint('EnvManager: Cleared saved environment');
+  }
+
+  /// Reset manager state (useful for testing)
+  @visibleForTesting
+  void resetForTesting() {
+    _isInitialized = false;
+    _currentEnvironment = null;
+    _availableEnvironments = [];
+    _usePersistentStorage = true;
+    _credentials.clear();
   }
 }
